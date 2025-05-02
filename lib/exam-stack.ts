@@ -127,6 +127,48 @@ export class ExamStack extends cdk.Stack {
         REGION: "eu-west-1",
       },
     });
+
+    //此处我们认为lambdaXFn是图像处理函数，lambdaYFn是消息处理函数，queueA是通知图像处理的sqs队列，queueB是通知邮件处理的队列
+    bucket.addEventNotification(
+      s3.EventType.OBJECT_CREATED,                      
+      new s3n.SnsDestination(topic1)             
+    );
+
+    topic1.addSubscription(new subs.SqsSubscription(queueA));
+
+    topic1.addSubscription(new subs.SqsSubscription(queueB));
+
+    const newImageEventSource = new events.SqsEventSource(queueA, {
+      batchSize: 5,
+      maxBatchingWindow: cdk.Duration.seconds(5),
+    });
+    lambdaXFn.addEventSource(newImageEventSource); 
+
+    const newMailEventSource = new events.SqsEventSource(queueB, {
+      batchSize: 5,
+      maxBatchingWindow: cdk.Duration.seconds(5),
+    }); 
+    lambdaYFn.addEventSource(newMailEventSource)
+
+    bucket.grantRead(lambdaXFn);
+
+    new cdk.CfnOutput(this, "bucketName", {
+      value: bucket.bucketName,
+    });
+    
+    lambdaYFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "ses:SendEmail",
+          "ses:SendRawEmail",
+          "ses:SendTemplatedEmail",
+        ],
+        resources: ["*"],  
+      })
+    );
+
+
     
   }
 }
